@@ -10,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/lalapapa-video-player/video-be/internal/playlistx"
 	"github.com/sgostarter/i/commerr"
 )
 
@@ -85,6 +86,15 @@ func (s *Server) handleSVideoIDInner(c *gin.Context) (videoID string, err error)
 		err = errors.New("no video url")
 
 		return
+	}
+
+	rFs, _, subDir, err := s.explainFSPath(req.VideoURL)
+	if err != nil {
+		return
+	}
+
+	if playlistFs, ok := rFs.(playlistx.PlaylistFS); ok {
+		_ = playlistFs.SetCurItem(subDir)
 	}
 
 	videoID = uuid.NewString() + filepath.Ext(req.VideoURL)

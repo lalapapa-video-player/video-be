@@ -4,20 +4,24 @@ import (
 	"fmt"
 	"net/http"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/godruoyi/go-snowflake"
 	"github.com/lalapapa-video-player/video-be/internal/i"
 	"github.com/lalapapa-video-player/video-be/internal/localx"
+	"github.com/lalapapa-video-player/video-be/internal/playlistx"
 	"github.com/lalapapa-video-player/video-be/internal/smbx"
 	"github.com/sgostarter/i/commerr"
+	"github.com/sgostarter/libeasygo/cuserror"
 )
 
 var (
 	RootIDPrefixLocalDir = "L-"
 	RootIDPrefixSMB      = "S-"
-	RootIDPrefixHISTORY  = "H-"
+	RootIDPrefixPlaylist = "P-"
+	RootIDPrefixHistory  = "H-"
 )
 
 type RootStat struct {
@@ -31,11 +35,18 @@ type SMBRoot struct {
 	Password string
 }
 
+type PlaylistRoot struct {
+	Path     string
+	Items    []string
+	CurIndex int
+}
+
 type TopRoots struct {
 	RootStats []RootStat
 
-	SMBRoots   map[string]SMBRoot
-	LocalRoots map[string]string
+	SMBRoots      map[string]SMBRoot
+	LocalRoots    map[string]string
+	PlayListRoots map[string]PlaylistRoot
 
 	fsMap map[string]i.FS
 }
@@ -49,19 +60,26 @@ func (tr *TopRoots) fix() {
 		tr.LocalRoots = make(map[string]string)
 	}
 
+	if len(tr.PlayListRoots) == 0 {
+		tr.PlayListRoots = make(map[string]PlaylistRoot)
+	}
+
 	if len(tr.fsMap) == 0 {
 		tr.fsMap = make(map[string]i.FS)
 	}
 }
 
 type RootRequest struct {
-	RType string `json:"rtype"` // smb, local
+	RType string `json:"rtype"` // smb, local, playlist
 
 	SMBAddress  string `json:"smb_address"`
 	SMBUser     string `json:"smb_user"`
 	SMBPassword string `json:"smb_password"`
 
 	LocalPath string `json:"local_path"`
+
+	PlaylistPath string   `json:"playlist_path"`
+	Playlist     []string `json:"playlist"`
 }
 
 type TestRootResponse struct {
@@ -111,7 +129,7 @@ func (s *Server) testRoot(req *RootRequest) (err error) {
 }
 
 func (s *Server) handleAddRoot(c *gin.Context) {
-	id, err := s.handleAddRootInner(c)
+	id, name, err := s.handleAddRootInner(c)
 	if err != nil {
 		c.String(http.StatusInternalServerError, err.Error())
 
@@ -119,11 +137,12 @@ func (s *Server) handleAddRoot(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"id": id,
+		"id":   id,
+		"name": name,
 	})
 }
 
-func (s *Server) handleAddRootInner(c *gin.Context) (id string, err error) {
+func (s *Server) handleAddRootInner(c *gin.Context) (id, name string, err error) {
 	var req RootRequest
 
 	err = c.ShouldBindJSON(&req)
@@ -136,6 +155,12 @@ func (s *Server) handleAddRootInner(c *gin.Context) (id string, err error) {
 		return
 	}
 
+	id, name, err = s.addRoot(&req)
+
+	return
+}
+
+func (s *Server) addRoot(req *RootRequest) (id, name string, err error) {
 	err = s.roots.Change(func(o *TopRoots) (n *TopRoots, err error) {
 		n = o
 		if n == nil {
@@ -182,12 +207,40 @@ func (s *Server) handleAddRootInner(c *gin.Context) (id string, err error) {
 
 			n.RootStats = append(n.RootStats, RootStat{
 				ID:   id,
-				Name: "本地: " + filepath.Base(req.LocalPath),
+				Name: "本地:" + filepath.Base(req.LocalPath),
 			})
 
 			n.LocalRoots[id] = req.LocalPath
 
 			n.fsMap[id] = localx.NewLocalXProvider(req.LocalPath)
+		} else if req.RType == "playlist" {
+			for _, root := range n.PlayListRoots {
+				if root.Path == req.PlaylistPath {
+					err = commerr.ErrExiting
+
+					return
+				}
+			}
+
+			id = fmt.Sprintf("%s%d", RootIDPrefixPlaylist, snowflake.ID())
+
+			n.RootStats = append(n.RootStats, RootStat{
+				ID:   id,
+				Name: "播放列表:" + filepath.Base(req.PlaylistPath),
+			})
+
+			n.PlayListRoots[id] = PlaylistRoot{
+				Path:     req.PlaylistPath,
+				Items:    req.Playlist,
+				CurIndex: 0,
+			}
+
+			ps := strings.Split(req.PlaylistPath, "/")
+
+			rFS := n.fsMap[ps[0]]
+			if rFS != nil {
+				n.fsMap[id] = playlistx.NewPlaylistXProvider(req.PlaylistPath, req.Playlist, rFS)
+			}
 		}
 
 		return
@@ -213,6 +266,110 @@ func (s *Server) getFSName(rid string) (name string) {
 				break
 			}
 		}
+	})
+
+	return
+}
+
+func (s *Server) handleRemoveRoot(c *gin.Context) {
+	err := s.handleRemoveRootInner(c)
+	if err == nil {
+		c.JSON(http.StatusOK, gin.H{
+			"statusCode": 0,
+		})
+
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"statusCode": 1,
+		"message":    err.Error(),
+	})
+}
+
+func (s *Server) handleRemoveRootInner(c *gin.Context) (err error) {
+	var req RemoveRootRequest
+
+	err = c.ShouldBindJSON(&req)
+	if err != nil {
+		return
+	}
+
+	_, rID, subDir, err := s.explainFSPath(req.Path)
+	if err != nil {
+		return
+	}
+
+	if subDir != "" {
+		err = cuserror.NewWithErrorMsg("错误的媒体Root")
+
+		return
+	}
+
+	err = s.roots.Change(func(o *TopRoots) (n *TopRoots, err error) {
+		n = o
+		n.fix()
+
+		for id, root := range n.PlayListRoots {
+			if strings.HasPrefix(root.Path, rID) {
+				err = cuserror.NewWithErrorMsg("有播放列表引用，请移除播放类表后再删除")
+
+				return
+			}
+
+			if id == req.Path {
+				delete(n.PlayListRoots, id)
+				delete(n.fsMap, id)
+
+				for idx, stat := range n.RootStats {
+					if stat.ID == id {
+						n.RootStats = slices.Delete(n.RootStats, idx, idx+1)
+
+						break
+					}
+				}
+
+				return
+			}
+		}
+
+		for id := range n.SMBRoots {
+			if id == req.Path {
+				delete(n.SMBRoots, id)
+				delete(n.fsMap, id)
+
+				for idx, stat := range n.RootStats {
+					if stat.ID == id {
+						n.RootStats = slices.Delete(n.RootStats, idx, idx+1)
+
+						break
+					}
+				}
+
+				return
+			}
+		}
+
+		for id := range n.LocalRoots {
+			if id == req.Path {
+				delete(n.LocalRoots, id)
+				delete(n.fsMap, id)
+
+				for idx, stat := range n.RootStats {
+					if stat.ID == id {
+						n.RootStats = slices.Delete(n.RootStats, idx, idx+1)
+
+						break
+					}
+				}
+
+				return
+			}
+		}
+
+		err = commerr.ErrNotFound
+
+		return
 	})
 
 	return

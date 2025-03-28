@@ -20,6 +20,7 @@ import (
 	cors "github.com/itsjamie/gin-cors"
 	"github.com/lalapapa-video-player/video-be/internal/config"
 	"github.com/lalapapa-video-player/video-be/internal/localx"
+	"github.com/lalapapa-video-player/video-be/internal/playlistx"
 	"github.com/lalapapa-video-player/video-be/internal/smbx"
 	"github.com/patrickmn/go-cache"
 	"github.com/sgostarter/libeasygo/stg/mwf"
@@ -57,6 +58,15 @@ func (s *Server) AfterLoad(r *TopRoots, err error) {
 
 	for id, root := range r.LocalRoots {
 		r.fsMap[id] = localx.NewLocalXProvider(root)
+	}
+
+	for id, root := range r.PlayListRoots {
+		ps := strings.Split(root.Path, "/")
+
+		rFS := r.fsMap[ps[0]]
+		if rFS != nil {
+			r.fsMap[id] = playlistx.NewPlaylistXProvider(root.Path, root.Items, rFS)
+		}
 	}
 }
 
@@ -130,6 +140,7 @@ func (s *Server) httpRoutine() {
 
 	httpServer.POST("/test-root", s.handleTestRoot)
 	httpServer.POST("/add-root", s.handleAddRoot)
+	httpServer.POST("/remove-root", s.handleRemoveRoot)
 
 	httpServer.GET("/", func(c *gin.Context) {
 		c.HTML(http.StatusOK, "index.html", nil)
@@ -139,8 +150,12 @@ func (s *Server) httpRoutine() {
 
 	httpServer.GET("/videos", s.ServeStreamFile)
 	httpServer.POST("/video/save-tm", s.handleVideoSaveTm)
+	httpServer.POST("/video/play/finished", s.handleVidePlayFinished)
 
 	httpServer.POST("/s-video-id", s.handleSVideoID)
+
+	httpServer.POST("/play-list/preview", s.handlePlayListPreview)
+	httpServer.POST("/play-list/save", s.handlePlayListSave)
 
 	_ = httpServer.Run(s.cfg.Listen)
 }

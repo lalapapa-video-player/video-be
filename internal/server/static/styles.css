@@ -86,3 +86,17 @@ button {
     padding: 10px 20px;
     border-radius: 4px;
 }
+
+#playlistDialog {
+    display: flex;
+    flex-direction: column;
+}
+
+#playlist {
+    overflow-y: auto;
+}
+
+#playlistDialog div[style*="text-align: center;"] {
+    margin-top: auto;
+    padding-bottom: 10px;
+}

@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/lalapapa-video-player/video-be/internal/playlistx"
 	"github.com/lalapapa-video-player/video-be/internal/utils"
 	"github.com/sgostarter/i/commerr"
 )
@@ -22,10 +23,15 @@ type BrowserResp struct {
 	Path     string     `json:"path"`
 	PathName string     `json:"pathName"`
 	Items    []VOFSItem `json:"items"`
+
+	PlaylistFlag int    `json:"playlistFlag"` //  1: has playlist; 2: can gen playlist
+	PlaylistID   string `json:"playlistID"`
+
+	CanRemove bool `json:"canRemove"`
 }
 
 func (s *Server) handleBrowser(c *gin.Context) {
-	curDir, curDirname, items, err := s.handleBrowserInner(c)
+	curDir, curDirname, items, playlistFlag, playlistID, canRemove, err := s.handleBrowserInner(c)
 	if err != nil {
 		c.String(http.StatusInternalServerError, err.Error())
 
@@ -33,13 +39,17 @@ func (s *Server) handleBrowser(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, BrowserResp{
-		Path:     curDir,
-		PathName: curDirname,
-		Items:    items,
+		Path:         curDir,
+		PathName:     curDirname,
+		Items:        items,
+		PlaylistFlag: playlistFlag,
+		PlaylistID:   playlistID,
+		CanRemove:    canRemove,
 	})
 }
 
-func (s *Server) handleBrowserInner(c *gin.Context) (curDir, curDirname string, fsItems []VOFSItem, err error) {
+func (s *Server) handleBrowserInner(c *gin.Context) (curDir, curDirname string,
+	fsItems []VOFSItem, playlistFlag int, playlistID string, canRemove bool, err error) {
 	var req BrowserRequest
 
 	err = c.ShouldBindJSON(&req)
@@ -108,23 +118,57 @@ TryTop:
 		return
 	}
 
+	canRemove = subDir == ""
+
 	fsItems = make([]VOFSItem, 0, len(fr))
 
-	fnSize := func(stat fs.FileInfo) string {
+	fnSize := func(index int, stat fs.FileInfo) string {
 		if stat == nil {
 			return ""
 		}
 
-		return utils.FormatSizePrecise(stat.Size())
+		sizeS := utils.FormatSizePrecise(stat.Size())
+
+		if playlistFs, ok := rFs.(playlistx.PlaylistFS); ok {
+			if playlistFs.GetCurIndex() == index {
+				sizeS = "▶️    " + sizeS
+			}
+		}
+
+		return sizeS
 	}
 
-	for _, item := range fr {
+	var videoNumbers int
+
+	for idx, item := range fr {
+		if item.Stat != nil {
+			if !item.Stat.IsDir() {
+				if s.isVideoFile(item.Path) {
+					videoNumbers++
+				}
+			}
+		}
+
 		fsItems = append(fsItems, VOFSItem{
 			Name:  item.Path,
 			Path:  item.Path,
-			Size:  fnSize(item.Stat),
+			Size:  fnSize(idx, item.Stat),
 			IsDir: item.Stat == nil || item.Stat.IsDir(),
 		})
+	}
+
+	if plID, exists := s.isPlaylistExists(curDir); exists {
+		playlistFlag = 1
+
+		playlistID = plID
+	}
+
+	if playlistFlag != 1 {
+		if _, ok := rFs.(playlistx.PlaylistFS); !ok {
+			if videoNumbers >= 2 {
+				playlistFlag = 2
+			}
+		}
 	}
 
 	return
