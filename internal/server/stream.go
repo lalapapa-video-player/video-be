@@ -10,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/sgostarter/i/commerr"
 )
 
 type StreamSession struct {
@@ -23,13 +24,20 @@ func (ss *StreamSession) Close() {
 	}
 }
 
-func (s *Server) GetStreamFile(file string) (ss *StreamSession, err error) {
-	stat, err := s.sMBs["x"].StatFile(file)
+func (s *Server) GetStreamFile(rID, file string) (ss *StreamSession, err error) {
+	rFs := s.getFS(rID)
+	if rFs == nil {
+		err = commerr.ErrNotFound
+
+		return
+	}
+
+	stat, err := rFs.StatFile(file)
 	if err != nil {
 		return
 	}
 
-	stream, err := s.sMBs["x"].OpenFile(file)
+	stream, err := rFs.OpenFile(file)
 	if err != nil {
 		return
 	}
@@ -48,6 +56,7 @@ type SVideoRequest struct {
 
 type SVideoResponse struct {
 	VideoID string `json:"video_id"`
+	LastTm  int    `json:"last_tm"`
 }
 
 func (s *Server) handleSVideoID(c *gin.Context) {
@@ -60,6 +69,7 @@ func (s *Server) handleSVideoID(c *gin.Context) {
 
 	c.JSON(http.StatusOK, SVideoResponse{
 		VideoID: videoID,
+		LastTm:  s.getVideoTm(videoID),
 	})
 }
 

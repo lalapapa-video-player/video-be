@@ -12,6 +12,37 @@ import (
 	"github.com/lalapapa-video-player/video-be/internal/i"
 )
 
+func TestSmbConnect(address, user, password string) (err error) {
+	if !strings.Contains(address, ":") {
+		address += ":445"
+	}
+
+	conn, err := net.Dial("tcp", address)
+	if err != nil {
+		return
+	}
+
+	defer func() {
+		_ = conn.Close()
+	}()
+
+	d := &smb2.Dialer{
+		Initiator: &smb2.NTLMInitiator{
+			User:     user,
+			Password: password,
+		},
+	}
+
+	session, err := d.Dial(conn)
+	if err != nil {
+		return
+	}
+
+	_ = session.Logoff()
+
+	return
+}
+
 func NewSmbXProvider(address, user, password string) i.FS {
 	return &smbXProvider{
 		address:  address,
@@ -86,6 +117,8 @@ func (impl *smbXProvider) mustActive() (err error) {
 func (impl *smbXProvider) listShares() (files []*i.FSEntry, err error) {
 	shares, err := impl.session.ListSharenames()
 	if err != nil {
+		impl.fixSMBError(err)
+
 		return
 	}
 
