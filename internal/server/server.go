@@ -19,6 +19,7 @@ import (
 	"github.com/google/uuid"
 	cors "github.com/itsjamie/gin-cors"
 	"github.com/lalapapa-video-player/video-be/internal/config"
+	"github.com/lalapapa-video-player/video-be/internal/localx"
 	"github.com/lalapapa-video-player/video-be/internal/smbx"
 	"github.com/patrickmn/go-cache"
 	"github.com/sgostarter/libeasygo/stg/mwf"
@@ -52,6 +53,10 @@ func (s *Server) AfterLoad(r *TopRoots, err error) {
 
 	for id, root := range r.SMBRoots {
 		r.fsMap[id] = smbx.NewSmbXProvider(root.Address, root.User, root.Password)
+	}
+
+	for id, root := range r.LocalRoots {
+		r.fsMap[id] = localx.NewLocalXProvider(root)
 	}
 }
 

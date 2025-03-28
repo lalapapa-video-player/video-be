@@ -2,7 +2,6 @@ let root = '';
 let pathName = '';
 let videoID = '';
 
-// 显示/隐藏遮罩的函数
 function showLoading() {
     document.getElementById('loadingOverlay').style.display = 'flex';
 }
@@ -82,7 +81,6 @@ async function saveVideoTm(tm) {
     }
 }
 
-// 通过HTTP获取最新文件列表
 async function fetchFileList(op, dir) {
     showLoading(); // 请求开始时显示遮罩
     try {
@@ -125,51 +123,51 @@ async function fetchFileList(op, dir) {
 }
 
 function enterDir(filename) {
-    fetchFileList("enter", filename);
+    fetchFileList("enter", filename).then(r => {});
 }
 
 let player = videojs('#video');
 player.on('loadedmetadata', function() {
     //player.currentTime(0);
     //player.play();
-    console.log('---4')
 });
 
 let lastVideoTmReport = 0;
+
 player.on("timeupdate", function(event) {
-    console.log(player.currentTime())
     if (Math.floor(Date.now() / 1000) - lastVideoTmReport > 2) {
-        saveVideoTm(player.currentTime())
+        saveVideoTm(player.currentTime()).then(() => {});
         lastVideoTmReport = Math.floor(Date.now() / 1000);
     }
 })
 player.on('ended', function() {
-    saveVideoTm(0);
-    console.log('Awww...over so soon?!');
+    saveVideoTm(0).then(() => {});
     changeVideoSrc('');
 });
 
-player.on('error', function(event) {
-    console.log('-------5', event);
+player.on('error', function() {
+    console.log('XXXXX',player.error);
 });
 
+
 videojs.hook('beforeerror', (player, err) => {
-    console.log('hook - beforeerror', player.src(), err)
-    // Video.js 在切换/指定 source 后立即会触发一个 err=null 的错误，这里过滤一下
     if (err !== null) {
-        if (err.message.includes('No compatible source')) {
-            console.log('---8', "No compatible source")
+        const errMsg = err.message + err.toString();
+        if (errMsg.includes('No compatible source') || errMsg.includes('Format error')
+            || errMsg.includes('NotSupportedError')) {
+            console.log('---8', "No compatible source", err)
+        } else {
+            console.log('err--', errMsg)
+            console.log('err 2--', err)
         }
-        //player.src(sources[++index])
     }
 
-    // 清除错误，避免 error 事件在控制台抛出错误
-    return null
+    return err
 })
 
 function changeVideoSrc(file) {
     player.pause();
-    setVideoSrc(root+"/"+file);
+    setVideoSrc(root+"/"+file).then(() => {});;
 }
 
 function openFile(filename) {
@@ -192,11 +190,6 @@ function closeSourceSelectionDialog() {
     document.getElementById('sourceSelectionDialog').style.display = 'none';
 }
 
-function selectLocalSource() {
-    document.getElementById('localDirectory').click();
-    closeSourceSelectionDialog();
-}
-
 function openSMBDialog() {
     document.getElementById('smbDialog').style.display = 'block';
     closeSourceSelectionDialog();
@@ -205,21 +198,6 @@ function openSMBDialog() {
 function selectOtherSource() {
     alert("其他来源功能尚未实现！");
     closeSourceSelectionDialog();
-}
-
-function showSourceSelection() {
-    const choice = confirm("选择来源：点击确定选择本地，点击取消选择 SMB");
-    if (choice) {
-        document.getElementById('localDirectory').click();
-    } else {
-        document.getElementById('smbDialog').style.display = 'block';
-    }
-}
-
-function handleLocalDirectory(event) {
-    const files = event.target.files;
-    console.log("选择的本地目录文件:", files);
-    alert("本地目录选择成功！");
 }
 
 function closeSMBDialog() {
@@ -231,8 +209,12 @@ function testSMBConnection() {
     const username = document.getElementById('smbUsername').value;
     const password = document.getElementById('smbPassword').value;
 
-    console.log("测试 SMB 连接:", { address, username, password });
-    testSMBRoot(address, username, password)
+    testRoot({
+        rtype: 'smb',
+        smb_address: address,
+        smb_user: username,
+        smb_password: password,
+    }).then(()=>{});
 }
 
 function confirmSMB() {
@@ -240,13 +222,17 @@ function confirmSMB() {
     const username = document.getElementById('smbUsername').value;
     const password = document.getElementById('smbPassword').value;
 
-    console.log("确认 SMB 配置:", { address, username, password });
-    addSMBRoot(address, username, password).then(()=>{
+    addRoot({
+        rtype: 'smb',
+        smb_address: address,
+        smb_user: user,
+        smb_password: password,
+    }).then(()=>{
         closeSMBDialog();
     });
 }
 
-async function testSMBRoot(address, user, password) {
+async function testRoot(data) {
     showLoading();
     try {
         const response = await fetch('/test-root', {
@@ -254,12 +240,7 @@ async function testSMBRoot(address, user, password) {
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({
-                rtype: 'smb',
-                smb_address: address,
-                smb_user: user,
-                smb_password: password,
-            })
+            body: JSON.stringify(data)
         });
 
         if (!response.ok) {
@@ -285,7 +266,7 @@ async function testSMBRoot(address, user, password) {
     }
 }
 
-async function addSMBRoot(address, user, password) {
+async function addRoot(data) {
     showLoading();
     try {
         const response = await fetch('/add-root', {
@@ -293,19 +274,14 @@ async function addSMBRoot(address, user, password) {
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({
-                rtype: 'smb',
-                smb_address: address,
-                smb_user: user,
-                smb_password: password,
-            })
+            body: JSON.stringify(data)
         });
 
         if (!response.ok) {
             throw new Error('网络响应失败');
         }
 
-        fetchFileList();
+        fetchFileList().then(()=>{});
     } catch (error) {
         console.error('获取文件列表失败:', error);
         alert('无法获取文件列表，请稍后重试');
@@ -314,6 +290,35 @@ async function addSMBRoot(address, user, password) {
     }
 }
 
+function showDirectoryDialog() {
+    closeSourceSelectionDialog();
+    document.getElementById('directoryDialog').style.display = 'block';
+}
+
+function closeDirectoryDialog() {
+    document.getElementById('directoryDialog').style.display = 'none';
+}
+
+function testDirectoryName() {
+    const directoryName = document.getElementById('directoryName').value;
+    console.log("测试目录名称:", directoryName);
+    testRoot({
+        rtype: 'local',
+        local_path: directoryName,
+    }).then(()=>{});
+}
+
+function confirmDirectoryName() {
+    const directoryName = document.getElementById('directoryName').value;
+
+    addRoot({
+        rtype: 'local',
+        local_path: directoryName,
+    }).then(()=>{
+        closeDirectoryDialog();
+    });
+}
+
 window.onload = function() {
-    fetchFileList();
+    fetchFileList().then(()=>{});
 };

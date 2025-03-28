@@ -16,10 +16,10 @@
     <span class="file-item" onclick="fetchFileList('leave')">..</span>
     <ul class="file-list" id="fileList">
     </ul>
-    <!-- 遮罩层 -->
-    <div id="loadingOverlay" class="loading-overlay" style="display: none;">
-        <span class="loading-text">加载中...</span>
-    </div>
+</div>
+
+<div id="loadingOverlay" class="loading-overlay" style="display: none;">
+    <span class="loading-text">加载中...</span>
 </div>
 
 <!-- SMB 配置对话框 -->
@@ -44,13 +44,24 @@
     </div>
 </div>
 
-<!-- 本地目录选择 -->
-<input type="file" id="localDirectory" webkitdirectory style="display: none;" onchange="handleLocalDirectory(event)">
+<!-- 目录名称输入对话框 -->
+<div id="directoryDialog" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2); z-index: 2000; width: 300px;">
+    <h3 style="margin-top: 0; text-align: center; font-size: 18px; color: #333;">输入目录名称</h3>
+    <div style="margin-bottom: 20px;">
+        <label style="display: block; font-size: 14px; color: #555; margin-bottom: 8px;">目录名称:</label>
+        <input type="text" id="directoryName" style="width: 90%; padding: 10px; border: 1px solid #ccc; border-radius: 4px;">
+    </div>
+    <div style="text-align: center;">
+        <button onclick="testDirectoryName()" style="padding: 10px 20px; margin-right: 10px; background: #007BFF; color: white; border: none; border-radius: 4px; cursor: pointer;">测试</button>
+        <button onclick="confirmDirectoryName()" style="padding: 10px 20px; margin-right: 10px; background: #28A745; color: white; border: none; border-radius: 4px; cursor: pointer;">确定</button>
+        <button onclick="closeDirectoryDialog()" style="padding: 10px 20px; background: #DC3545; color: white; border: none; border-radius: 4px; cursor: pointer;">取消</button>
+    </div>
+</div>
 
 <!-- 选择来源对话框 -->
 <div id="sourceSelectionDialog" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 20px; border: 1px solid #ccc; z-index: 2000;">
     <h3>选择来源</h3>
-    <button onclick="selectLocalSource()">本地</button>
+    <button onclick="showDirectoryDialog()">本地</button> <!-- 修改按钮 -->
     <button onclick="openSMBDialog()">SMB</button>
     <button onclick="selectOtherSource()">其他</button>
     <button onclick="closeSourceSelectionDialog()">取消</button>
@@ -61,7 +72,7 @@
         <button onclick="videoBack()">返回</button>
     </div>
     <video id="video" class="video-js vjs-default-skin" controls preload="auto" width="800" height="600">
-        <source src="" />
+
     </video>
 </div>
 

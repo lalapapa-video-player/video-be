@@ -3,11 +3,13 @@ package server
 import (
 	"fmt"
 	"net/http"
+	"path/filepath"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/godruoyi/go-snowflake"
 	"github.com/lalapapa-video-player/video-be/internal/i"
+	"github.com/lalapapa-video-player/video-be/internal/localx"
 	"github.com/lalapapa-video-player/video-be/internal/smbx"
 	"github.com/sgostarter/i/commerr"
 )
@@ -32,7 +34,8 @@ type SMBRoot struct {
 type TopRoots struct {
 	RootStats []RootStat
 
-	SMBRoots map[string]SMBRoot
+	SMBRoots   map[string]SMBRoot
+	LocalRoots map[string]string
 
 	fsMap map[string]i.FS
 }
@@ -42,17 +45,23 @@ func (tr *TopRoots) fix() {
 		tr.SMBRoots = make(map[string]SMBRoot)
 	}
 
+	if len(tr.LocalRoots) == 0 {
+		tr.LocalRoots = make(map[string]string)
+	}
+
 	if len(tr.fsMap) == 0 {
 		tr.fsMap = make(map[string]i.FS)
 	}
 }
 
 type RootRequest struct {
-	RType string `json:"rtype"`
+	RType string `json:"rtype"` // smb, local
 
 	SMBAddress  string `json:"smb_address"`
 	SMBUser     string `json:"smb_user"`
 	SMBPassword string `json:"smb_password"`
+
+	LocalPath string `json:"local_path"`
 }
 
 type TestRootResponse struct {
@@ -80,10 +89,6 @@ func (s *Server) handleTestRootInner(c *gin.Context) (err error) {
 		return
 	}
 
-	if !strings.Contains(req.SMBAddress, ":") {
-		req.SMBAddress += ":445"
-	}
-
 	err = s.testRoot(&req)
 
 	return
@@ -91,9 +96,13 @@ func (s *Server) handleTestRootInner(c *gin.Context) (err error) {
 
 func (s *Server) testRoot(req *RootRequest) (err error) {
 	if req.RType == "smb" {
+		if !strings.Contains(req.SMBAddress, ":") {
+			req.SMBAddress += ":445"
+		}
+
 		err = smbx.TestSmbConnect(req.SMBAddress, req.SMBUser, req.SMBPassword)
 	} else if req.RType == "local" {
-		err = commerr.ErrUnimplemented
+		err = localx.TestLocal(req.LocalPath)
 	} else {
 		err = commerr.ErrUnknown
 	}
@@ -127,10 +136,6 @@ func (s *Server) handleAddRootInner(c *gin.Context) (id string, err error) {
 		return
 	}
 
-	if !strings.Contains(req.SMBAddress, ":") {
-		req.SMBAddress += ":445"
-	}
-
 	err = s.roots.Change(func(o *TopRoots) (n *TopRoots, err error) {
 		n = o
 		if n == nil {
@@ -141,28 +146,49 @@ func (s *Server) handleAddRootInner(c *gin.Context) (id string, err error) {
 
 		n.fix()
 
-		for _, root := range n.SMBRoots {
-			if root.Address == req.SMBAddress && root.User == req.SMBUser {
-				err = commerr.ErrExiting
+		if req.RType == "smb" {
+			for _, root := range n.SMBRoots {
+				if root.Address == req.SMBAddress && root.User == req.SMBUser {
+					err = commerr.ErrExiting
 
-				return
+					return
+				}
 			}
+
+			id = fmt.Sprintf("%s%d", RootIDPrefixSMB, snowflake.ID())
+
+			n.RootStats = append(n.RootStats, RootStat{
+				ID:   id,
+				Name: "SMB://" + req.SMBUser + "@" + req.SMBAddress,
+			})
+
+			n.SMBRoots[id] = SMBRoot{
+				Address:  req.SMBAddress,
+				User:     req.SMBUser,
+				Password: req.SMBPassword,
+			}
+
+			n.fsMap[id] = smbx.NewSmbXProvider(req.SMBAddress, req.SMBUser, req.SMBPassword)
+		} else if req.RType == "local" {
+			for _, root := range n.LocalRoots {
+				if root == req.LocalPath {
+					err = commerr.ErrExiting
+
+					return
+				}
+			}
+
+			id = fmt.Sprintf("%s%d", RootIDPrefixLocalDir, snowflake.ID())
+
+			n.RootStats = append(n.RootStats, RootStat{
+				ID:   id,
+				Name: "本地: " + filepath.Base(req.LocalPath),
+			})
+
+			n.LocalRoots[id] = req.LocalPath
+
+			n.fsMap[id] = localx.NewLocalXProvider(req.LocalPath)
 		}
-
-		id = fmt.Sprintf("%s%d", RootIDPrefixSMB, snowflake.ID())
-
-		n.RootStats = append(n.RootStats, RootStat{
-			ID:   id,
-			Name: "SMB://" + req.SMBUser + "@" + req.SMBAddress,
-		})
-
-		n.SMBRoots[id] = SMBRoot{
-			Address:  req.SMBAddress,
-			User:     req.SMBUser,
-			Password: req.SMBPassword,
-		}
-
-		n.fsMap[id] = smbx.NewSmbXProvider(req.SMBAddress, req.SMBUser, req.SMBPassword)
 
 		return
 	})
