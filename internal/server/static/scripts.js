@@ -13,6 +13,11 @@ function hideLoading() {
     document.getElementById('loadingOverlay').style.display = 'none';
 }
 
+function getFileNameFromPath(path) {
+    const parts = path.split('/');
+    return parts[parts.length - 1];
+}
+
 // 创建文件项的HTML
 function createFileItem(file) {
     if (file.is_dir) {
@@ -36,6 +41,7 @@ function createFileItem(file) {
 async function setVideoSrc(videoURL) {
     showLoading();
     try {
+        document.getElementById('playingVideo').textContent = getFileNameFromPath(videoURL);
         const response = await fetch('/s-video-id', {
             method: 'POST',
             headers: {
@@ -199,6 +205,7 @@ function changeVideoSrc(file) {
 }
 
 function openFile(filename) {
+    document.getElementById('playingVideo').textContent = '';
     document.getElementById('file-list-container').style.display = 'none';
     document.getElementById('video-container').style.display = 'block';
     changeVideoSrc(filename);

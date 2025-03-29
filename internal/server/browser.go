@@ -118,6 +118,8 @@ TryTop:
 		return
 	}
 
+	playlistFs, _ := rFs.(playlistx.PlaylistFS)
+
 	canRemove = subDir == ""
 
 	fsItems = make([]VOFSItem, 0, len(fr))
@@ -129,7 +131,7 @@ TryTop:
 
 		sizeS := utils.FormatSizePrecise(stat.Size())
 
-		if playlistFs, ok := rFs.(playlistx.PlaylistFS); ok {
+		if playlistFs != nil {
 			if playlistFs.GetCurIndex() == index {
 				sizeS = "▶️    " + sizeS
 			}

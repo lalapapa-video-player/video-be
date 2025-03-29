@@ -18,7 +18,7 @@
         <button id="playlistGen" onclick="playlistGen()">生成播放列表</button>
         <button id="removeRoot" onclick="removeRoot()">移除存储</button>
     </div>
-    <span class="current-path" id="root" class="bordered"></span>
+    <span class="current-path bordered" id="root"></span>
     <span class="file-item" onclick="fetchFileList('leave')">..</span>
     <ul class="file-list" id="fileList">
     </ul>
@@ -87,6 +87,7 @@
     <div class="controls">
         <button onclick="videoBack()">返回</button>
     </div>
+    <span class="current-path bordered" id="playingVideo"></span>
     <video id="video" class="video-js vjs-default-skin vjs-16-9" controls preload="auto">
 
     </video>

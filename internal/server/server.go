@@ -66,7 +66,11 @@ func (s *Server) AfterLoad(r *TopRoots, err error) {
 
 		rFS := r.fsMap[ps[0]]
 		if rFS != nil {
-			r.fsMap[id] = playlistx.NewPlaylistXProvider(root.Path, root.Items, rFS)
+			playlistFS := playlistx.NewPlaylistXProvider(root.Path, root.Items, rFS)
+
+			_ = playlistFS.SetCurIndex(root.CurIndex)
+
+			r.fsMap[id] = playlistFS
 		}
 	}
 }
