@@ -111,6 +111,15 @@ async function fetchFileList(op, dir) {
 
         playlistFlag = resp["playlistFlag"]
         playlistID = resp["playlistID"]
+        const canRemove = resp["canRemove"]
+
+        const removeRoot = document.getElementById('removeRoot')
+        if (canRemove) {
+            removeRoot.style.display = 'inline';
+        } else {
+            removeRoot.style.display = 'none';
+        }
+
 
         const playList = document.getElementById('playlistGen')
         if (playlistFlag === 0) {
