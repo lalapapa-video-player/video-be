@@ -23,6 +23,7 @@ import (
 	"github.com/lalapapa-video-player/video-be/internal/playlistx"
 	"github.com/lalapapa-video-player/video-be/internal/smbx"
 	"github.com/patrickmn/go-cache"
+	"github.com/sgostarter/libeasygo/pathutils"
 	"github.com/sgostarter/libeasygo/stg/mwf"
 )
 
@@ -84,6 +85,9 @@ type LastVideoTmItem struct {
 }
 
 func NewServer(cfg *config.Config) *Server {
+	_ = pathutils.MustDirExists(cfg.DataRoot)
+	_ = pathutils.MustDirExists(cfg.CacheRoot)
+
 	s := &Server{
 		cfg:    cfg,
 		dCache: cache.New(time.Minute, time.Minute),
@@ -137,6 +141,8 @@ func (s *Server) httpRoutine() {
 	}
 
 	httpServer.SetHTMLTemplate(tmpl)
+
+	httpServer.StaticFileFS("/favicon.ico", "/static/favicon.ico", http.FS(fsStatic))
 
 	httpServer.POST("/test-root", s.handleTestRoot)
 	httpServer.POST("/add-root", s.handleAddRoot)

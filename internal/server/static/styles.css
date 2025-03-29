@@ -61,9 +61,30 @@
 }
 
 button {
-    padding: 8px 15px;
-    margin-right: 10px;
+    padding: 10px 20px;
+    font-size: 16px;
+    border: none;
+    background-color: #007BFF;
+    color: white;
+    border-radius: 5px;
     cursor: pointer;
+}
+
+/* 移动设备样式 */
+@media (max-width: 768px) {
+    button {
+        /* 增加内边距和字体大小 */
+        padding: 15px 30px;
+        font-size: 18px;
+        /* 确保最小尺寸 */
+        min-width: 48px;
+        min-height: 48px;
+    }
+}
+
+/* 悬停效果（桌面端） */
+button:hover {
+    background-color: #0056b3;
 }
 
 .loading-overlay {

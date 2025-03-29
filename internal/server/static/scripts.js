@@ -159,6 +159,8 @@ player.on('loadedmetadata', function() {
     //player.play();
 });
 
+//player.landscapeFullscreen();
+
 let lastVideoTmReport = 0;
 
 player.on("timeupdate", function(event) {
