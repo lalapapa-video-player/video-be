@@ -88,13 +88,30 @@ func (s *Server) handleSVideoIDInner(c *gin.Context) (videoID string, err error)
 		return
 	}
 
-	rFs, _, subDir, err := s.explainFSPath(req.VideoURL)
+	rFs, fsID, subDir, err := s.explainFSPath(req.VideoURL)
 	if err != nil {
 		return
 	}
 
 	if playlistFs, ok := rFs.(playlistx.PlaylistFS); ok {
 		_ = playlistFs.SetCurItem(subDir)
+
+		err = s.roots.Change(func(o *TopRoots) (n *TopRoots, err error) {
+			n = o
+
+			var r PlaylistRoot
+
+			r, ok = n.PlayListRoots[fsID]
+			if !ok {
+				return
+			}
+
+			r.CurIndex = playlistFs.GetCurIndex()
+
+			n.PlayListRoots[fsID] = r
+
+			return
+		})
 	}
 
 	videoID = uuid.NewString() + filepath.Ext(req.VideoURL)
