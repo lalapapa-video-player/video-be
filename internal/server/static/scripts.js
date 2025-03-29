@@ -420,6 +420,15 @@ function previewAndSavePlaylistDialog(files) {
         li.addEventListener('dragstart', (e) => {
             e.dataTransfer.setData('text/plain', e.target.dataset.index);
             e.target.classList.add('dragging');
+            // Safari 兼容性：设置拖动图像
+            const dragImage = document.createElement('div');
+            dragImage.textContent = e.target.textContent;
+            dragImage.style.position = 'absolute';
+            dragImage.style.top = '-9999px';
+            dragImage.style.left = '-9999px';
+            document.body.appendChild(dragImage);
+            e.dataTransfer.setDragImage(dragImage, 0, 0);
+            setTimeout(() => document.body.removeChild(dragImage), 0);
         });
 
         li.addEventListener('dragover', (e) => {
@@ -468,6 +477,20 @@ function previewAndSavePlaylistDialog(files) {
         });
 
         playlist.appendChild(li);
+    });
+
+    // 自动滚动功能
+    playlist.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        const scrollThreshold = 20; // 距离边缘的阈值
+        const scrollSpeed = 5; // 滚动速度
+
+        const rect = playlist.getBoundingClientRect();
+        if (e.clientY < rect.top + scrollThreshold) {
+            playlist.scrollTop -= scrollSpeed; // 向上滚动
+        } else if (e.clientY > rect.bottom - scrollThreshold) {
+            playlist.scrollTop += scrollSpeed; // 向下滚动
+        }
     });
 
     const titleBar = document.getElementById("playlistTitle"); // 修复选择器错误
