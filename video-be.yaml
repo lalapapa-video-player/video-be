@@ -1,3 +1,0 @@
-listen: ":8200"
-dataRoot: data/data
-cacheRoot: data/cache
